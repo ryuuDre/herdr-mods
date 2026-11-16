@@ -6,7 +6,7 @@
 //   files/reads.js        the folder tree and Git's view of it
 //   files/file-icons.js   Better Icons' pictures, when it's installed
 //   actions/open.js       opening tabs, and handing a file to Better Changes
-//   actions/outside.js    code editors, Finder
+//   actions/outside.js    code editors, the file manager
 //   actions/agents.js     sending a file to an agent
 //   actions/menus.js      popup menus
 //   views/tree.js, viewer.js, context-menu.js   the drawing

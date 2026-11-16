@@ -3,16 +3,21 @@ export const PER_FOLDER = 500;
 export const TOTAL_ROWS = 5000;
 export const MAX_CHARS = 400000;
 
-// Editors found by app ID: a Nix or per-user install isn't in /Applications.
+// Editors by app ID on macOS and by command on Linux: a Nix or per-user install isn't in
+// /Applications, and Linux has no app IDs to ask Spotlight for.
 // More can be added under `settings.editors` in mod.json.
 export const EDITORS = [
-  { name: "Zed", bundle: "dev.zed.Zed" },
-  { name: "VS Code", bundle: "com.microsoft.VSCode" },
-  { name: "Cursor", bundle: "com.todesktop.230313mzl4w4u92" },
-  { name: "Windsurf", bundle: "com.exafunction.windsurf" },
-  { name: "Sublime Text", bundle: "com.sublimetext.4" },
-  { name: "Nova", bundle: "com.panic.Nova" },
+  { name: "Zed", bundle: "dev.zed.Zed", command: "zed" },
+  { name: "VS Code", bundle: "com.microsoft.VSCode", command: "code" },
+  { name: "Cursor", bundle: "com.todesktop.230313mzl4w4u92", command: "cursor" },
+  { name: "Windsurf", bundle: "com.exafunction.windsurf", command: "windsurf" },
+  { name: "Sublime Text", bundle: "com.sublimetext.4", command: "subl" },
+  { name: "Nova", bundle: "com.panic.Nova", command: null },
 ];
+
+// What a menu, a chooser and `settings.editors` call an editor: its app ID where there is
+// one, else its command.
+export const editorId = (editor) => editor.bundle ?? editor.command;
 
 const LANGUAGES = {
   ts: "js",

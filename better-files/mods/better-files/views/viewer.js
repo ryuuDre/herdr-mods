@@ -6,6 +6,7 @@ import { appHome, exec, focused, layout, panes, readTextFile, setShared, shared,
 import {
   baseName,
   buildRows,
+  editorId,
   fileLinesOf,
   hunkKey,
   isImage,
@@ -555,9 +556,9 @@ export const viewerMethods = {
             accessibilityLabel: "Open in an editor",
             width: 200,
             trigger: MenuButton({ id: "viewer-open-in-trigger", label: "Open in" }),
-            choices: editors.map((e) => ({ id: e.bundle, label: e.name })),
-            onChoose: (bundle) => {
-              this.openInEditor(editors.find((e) => e.bundle === bundle), file.path);
+            choices: editors.map((e) => ({ id: editorId(e), label: e.name })),
+            onChoose: (id) => {
+              this.openInEditor(editors.find((e) => editorId(e) === id), file.path);
             },
           }),
         ),

@@ -19,7 +19,7 @@ const source = `const { highlightLines, tokenizeLine, syntaxColors, languageOf: 
 
 const TREE = { '/repo': [['d', 'src'], ['f', 'b.md'], ['f', 'a.md']], '/repo/src': [['f', 'main.go']] };
 
-function world({ copyImage, diff = '', layout = {}, mode = 'sidebar', viewer, file, target, tree = TREE, status = ' M b.md\0M  src/main.go\0?? new.txt\0', editors = ['dev.zed.Zed'], top = '/repo', machine = null, cwd = '/repo', texts = {}, agents = [], known = [], sharedInit = {}, hcResult } = {}) {
+function world({ copyImage, diff = '', layout = {}, mode = 'sidebar', viewer, file, target, platform = 'macos', commands = ['code'], tree = TREE, status = ' M b.md\0M  src/main.go\0?? new.txt\0', editors = ['dev.zed.Zed'], top = '/repo', machine = null, cwd = '/repo', texts = {}, agents = [], known = [], sharedInit = {}, hcResult } = {}) {
   const store = new Map(Object.entries(sharedInit));
   const ran = [], execs = [], sent = [], clipboard = [], closed = [], overlays = [], urls = [];
   const live = { layout, panes: [{ pane: 'p1', tab: 'tab1', cwd }], focused: { space: 's', tab: 'tab1', pane: 'p1', cwd }, agents, texts: { ...texts } };
@@ -60,7 +60,7 @@ function world({ copyImage, diff = '', layout = {}, mode = 'sidebar', viewer, fi
     Popover: { new: (id) => el().id(id) }, Textarea: { new: () => el() }, TextareaState: { new: state },
     Scrollbar: { vertical: () => el() }, TextView: { markdown: (id, text) => el().id(id).child(`md:${text}`) }, v_virtual_list: (_id, count, sizes, key, render) => { const e = el().id('viewer-list'); if (Array.isArray(sizes) && sizes.length !== count) throw new Error('sizes'); for (let i = 0; i < count; i++) key(i); e.children(render({ start: 0, end: Math.min(count, 60) })); return e; }, Editor: { new: (s) => el().child(s.text) }, EditorState: { new: (o) => { const s = state(o); context.lastCode = s; return s; } },
     theme: () => new Proxy({}, { get: (_t, k) => `#${String(k)}` }),
-    settings: () => ({ font_family: 'Code', font_size: 14 }), window: () => ({ platform: 'macos' }),
+    settings: () => ({ font_family: 'Code', font_size: 14 }), window: () => ({ platform }),
     props: () => ({ mode, viewer, file, target, space: 's', overlay: 'ov1' }),
     // Space `s` is the active one; a pane with `space` set puts its tab in that space instead.
     spaces: () => {
@@ -82,6 +82,7 @@ function world({ copyImage, diff = '', layout = {}, mode = 'sidebar', viewer, fi
     exec: async (bin, args, options) => {
       execs.push([bin, ...args]);
       if (bin === 'sh' && args[2] === 'copy-image') return copyImage ?? { code: 0 };
+      if (bin === 'sh' && args[1]?.includes('command -v')) return { code: 0, stdout: commands.join('\n'), stderr: '' };
       if (bin === 'sh') return { code: 0, stdout: (tree[args.at(-1)] ?? []).flatMap(([k, n]) => [k, n, '']).join('\0').replace(/\0\0/g, '\0') };
       if (bin === 'mdfind') return { code: 0, stdout: editors.some((b) => args[0].includes(b)) ? '/Apps/It.app\n' : '' };
       if (bin === 'git' && args[0] === 'rev-parse') return top ? { code: 0, stdout: `${top}\n` } : { code: 128, stdout: '' };
@@ -612,7 +613,7 @@ test('the folder icon opens the whole folder in an editor or Finder, here only',
   assert.match(strings(find(h.mod.render(), 'files-folder-menu')), /Open in Zed[\s\S]*Open in Finder/);
   click(h, 'files-folder-option-dev.zed.Zed');
   find(h.mod.render(), 'files-folder').handlers.open(true, h.cx);
-  click(h, 'files-folder-option-finder');
+  click(h, 'files-folder-option-file-manager');
   await h.flush();
   assert.deepEqual(JSON.parse(JSON.stringify(h.execs.filter(([b]) => b === 'open'))), [['open', '-b', 'dev.zed.Zed', '/repo'], ['open', '/repo']]);
   const far = await ready({ machine: 'box', sharedInit: { 'better-files.editors': zed } });
@@ -622,6 +623,42 @@ test('the folder icon opens the whole folder in an editor or Finder, here only',
 test('only editors that are installed are found', async () => {
   const h = await ready({ editors: ['dev.zed.Zed'] });
   assert.deepEqual([...h.store.get('better-files.editors').map((e) => e.name)], ['Zed']);
+  const none = await ready({ platform: 'linux', commands: [] });
+  assert.deepEqual([...none.store.get('better-files.editors')], [], 'nothing is assumed to be installed');
+  const linux = await ready({ platform: 'linux', commands: ['code'] });
+  assert.deepEqual([...linux.store.get('better-files.editors').map((e) => e.name)], ['VS Code']);
+  assert.ok(!linux.execs.some(([b]) => b === 'mdfind'), 'Spotlight says nothing on Linux');
+});
+
+test('on Linux, a folder opens in an editor or the file manager by command', async () => {
+  const h = await ready({ platform: 'linux', commands: ['code'] });
+  find(h.mod.render(), 'files-folder').handlers.open(true, h.cx);
+  assert.match(strings(find(h.mod.render(), 'files-folder-menu')), /Open in VS Code[\s\S]*Open in file manager/);
+  click(h, 'files-folder-option-file-manager');
+  find(h.mod.render(), 'files-folder').handlers.open(true, h.cx);
+  click(h, 'files-folder-option-com.microsoft.VSCode');
+  await h.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.execs.filter(([b]) => b === 'xdg-open'))), [['xdg-open', '/repo']]);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.execs.find(([b]) => b === 'code'))), ['code', '/repo']);
+  assert.ok(!h.execs.some(([b]) => b === 'open'), 'no macOS open');
+});
+
+test('on Linux, a file opens in an editor, the default app or the file manager', async () => {
+  const shared_ = { 'better-files.editors': [{ name: 'VS Code', bundle: 'com.microsoft.VSCode', command: 'code' }], 'better-files.has-changes': true };
+  const viewer = await ready({ platform: 'linux', mode: 'viewer', viewer: 'v', file: { path: '/repo/a.md', root: '/repo', on: null }, sharedInit: shared_ });
+  find(viewer.mod.render(), 'viewer-open-in').handlers.open(true, viewer.cx);
+  click(viewer, 'viewer-open-in-option-com.microsoft.VSCode');
+  await viewer.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(viewer.execs.find(([b]) => b === 'code'))), ['code', '/repo/a.md']);
+  const menu = await menuOf({ platform: 'linux', sharedInit: shared_ });
+  assert.match(labels(menu), /Open in VS Code[\s\S]*Open in default app[\s\S]*Show in file manager/);
+  click(menu, 'files-menu-reveal');
+  click(menu, 'files-menu-default');
+  click(menu, 'files-menu-editor-com.microsoft.VSCode');
+  await menu.flush();
+  assert.deepEqual(JSON.parse(JSON.stringify(menu.execs.filter(([b]) => b === 'xdg-open'))), [['xdg-open', '/repo'], ['xdg-open', '/repo/b.md']]);
+  assert.deepEqual(JSON.parse(JSON.stringify(menu.execs.find(([b]) => b === 'code'))), ['code', '/repo/b.md']);
+  assert.ok(!menu.execs.some(([b]) => b === 'open'), 'no macOS open');
 });
 
 const FILE_TARGET = { path: '/repo/b.md', root: '/repo', on: null, top: '/repo', dir: false, relative: 'b.md', changed: true, staged: false };
